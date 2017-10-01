@@ -1,5 +1,7 @@
 package services;
 
+import java.util.Random;
+
 import org.apache.log4j.Logger;
 
 import breaker.BreakerCommand;
@@ -13,6 +15,10 @@ public class AddProductCommand extends BreakerCommand{
 	@Override
 	public void run() {
 		LOGGER.info("Process product "+product.getName());
+	/*	int random = new Random().nextInt(20);
+		if(random > 15){
+			int a = 1/0;
+		}*/
 	}
 
 	public Product getProduct() {

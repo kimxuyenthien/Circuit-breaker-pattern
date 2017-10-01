@@ -5,7 +5,7 @@ import services.ProductService;
 
 public class Client {
 	public static void main(String args[]){
-		ProductService productService = new ProductService(5, 5000, 2);
+		ProductService productService = new ProductService(5, 3000, 2);
 		new Thread(productService).start(); 
 		
 		for(int i = 0; i < 10000000; i++){

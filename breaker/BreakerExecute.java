@@ -21,20 +21,20 @@ public abstract class BreakerExecute implements Runnable {
 	private static Logger LOGGER = Logger.getLogger(BreakerExecute.class);
 
 	private static Timer TIMER = new HashedWheelTimer();
-	private BlockingQueue<BreakerCommand> commandQueues = new LinkedBlockingQueue<>();
-	private ConcurrentMap<BreakerCommand, Integer> mapRetryCommand = new ConcurrentHashMap<>();
-	private BreakerStatus status = BreakerStatus.CLOSE;
+	private BlockingQueue<BreakerCommand> commandQueues = new LinkedBlockingQueue<BreakerCommand>();
+	private ConcurrentMap<Long, Integer> mapRetryCommand = new ConcurrentHashMap<Long, Integer>();
+	private BreakerState state = BreakerState.CLOSE;
 	private AtomicInteger numberFailure = new AtomicInteger(0);
 	private int numberAttempts;
 	private int timeout;
-	private int numberLimitFailure;
+	private int limitFailure;
 	private boolean isRunning = false;
 
-	public BreakerExecute(int numberAttempts, int timeout, int numberLimitFailure) {
+	public BreakerExecute(int numberAttempts, int timeout, int limitFailure) {
 		super();
 		this.numberAttempts = numberAttempts;
 		this.timeout = timeout;
-		this.numberLimitFailure = numberLimitFailure;
+		this.limitFailure = limitFailure;
 	}
 
 	public void run() {
@@ -47,11 +47,11 @@ public abstract class BreakerExecute implements Runnable {
 		while (isRunning) {
 			
 			BreakerCommand currentCommand = null;
-			// take a command from queue to execute
+
 			try {
 				currentCommand = commandQueues.take();
-				
-				if (status == BreakerStatus.OPEN) {
+
+				if (state == BreakerState.OPEN) {
 					try {
 						error(new BreakerRejectException(), null);
 						commandQueues.add(currentCommand);
@@ -63,9 +63,9 @@ public abstract class BreakerExecute implements Runnable {
 				
 				currentCommand.run();
 
-				if (status == BreakerStatus.HALF_OPEN) {
+				if (state == BreakerState.HALF_OPEN) {
 
-					status = BreakerStatus.CLOSE;
+					state = BreakerState.CLOSE;
 					numberFailure.set(0);
 				}
 
@@ -74,49 +74,49 @@ public abstract class BreakerExecute implements Runnable {
 				LOGGER.error(err, err);
 				
 				// re-put to queue attempts to execute command
-				Integer counter = mapRetryCommand.get(currentCommand);
+				Integer counter = mapRetryCommand.get(currentCommand.getId());
 				if(counter == null){
 					counter = 1;
-					mapRetryCommand.put(currentCommand, counter);
+					mapRetryCommand.put(currentCommand.getId(), counter);
 				}
 				
 				if (counter < numberAttempts) {
 					commandQueues.add(currentCommand);
 					counter++;
-					mapRetryCommand.put(currentCommand, counter);
+					mapRetryCommand.put(currentCommand.getId(), counter);
 					
 				} else {
 				
-					mapRetryCommand.remove(currentCommand);
+					mapRetryCommand.remove(currentCommand.getId());
 					try {
 						error(new BreakerExpiredException(), currentCommand);
 					} catch (Exception errHandle) {
 						LOGGER.error(errHandle, errHandle);
 					}
 				}
-				if (status == BreakerStatus.CLOSE) {
+				if (state == BreakerState.CLOSE) {
 
-					if (numberFailure.incrementAndGet() > numberLimitFailure) {
+					if (numberFailure.incrementAndGet() > limitFailure) {
 					
-						status = BreakerStatus.OPEN;
+						state = BreakerState.OPEN;
 						TIMER.newTimeout(new TimerTask() {
 							@Override
 							public void run(Timeout timeout) throws Exception {
 
-								status = BreakerStatus.HALF_OPEN;
+								state = BreakerState.HALF_OPEN;
 							}
 						}, timeout, TimeUnit.MILLISECONDS);
 					}
 				}
 
-				if (status == BreakerStatus.HALF_OPEN) {
+				if (state == BreakerState.HALF_OPEN) {
 
-					status = BreakerStatus.OPEN;
+					state = BreakerState.OPEN;
 					TIMER.newTimeout(new TimerTask() {
 						@Override
 						public void run(Timeout timeout) throws Exception {
 
-							status = BreakerStatus.HALF_OPEN;
+							state = BreakerState.HALF_OPEN;
 						}
 					}, timeout, TimeUnit.MILLISECONDS);
 				}
@@ -129,8 +129,7 @@ public abstract class BreakerExecute implements Runnable {
 		try {
 			commandQueues.put(command);
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOGGER.error(e, e);
 		}
 	}
 
