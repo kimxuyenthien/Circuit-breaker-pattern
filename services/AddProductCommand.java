@@ -1,7 +1,5 @@
 package services;
 
-import java.util.Random;
-
 import org.apache.log4j.Logger;
 
 import breaker.BreakerCommand;

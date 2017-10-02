@@ -27,7 +27,7 @@ public class ProductService extends BreakerExecute{
 		LOGGER.error(err, err);
 		
 		if(err instanceof BreakerRejectException){
-			System.out.println("Service is unavaible");
+			LOGGER.info("Service is unavaible");
 		}
 	}
 }
